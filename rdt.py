@@ -11,7 +11,7 @@ import random
 
 PACKET_SIZE = 50  # 1472  # 1500-8(udp header)-20(IP header) = 1472
 PAYLOAD_SIZE = 1456  # 1472(PACKET_SIZE)-16(Header) = 1456
-ret_time = 5  # timeout value
+ret_time = .5  # timeout value
 
 
 def unpack(packet):
@@ -50,9 +50,7 @@ class RDTSocket(UnreliableSocket):
         self.send_base = 0  # points to the oldest unacked packet
         self.recv_base = 0  # points to the next expected packet in chunks
         self.off_by = 0 # The starting interval, so seq_num = off_by + recv_base
-        """
-        Add any other necesesary initial arguments
-        """
+
 
     def accept(self) -> list:
         """
@@ -83,7 +81,6 @@ class RDTSocket(UnreliableSocket):
         Connect to a remote socket at address.
         Corresponds to the process of establishing a connection on the client side.
         """
-        # TODO Set seq_num equal to something random
         self.off_by = random.randint(0, 100)
         self._send_to = address
         while True:
@@ -122,7 +119,7 @@ class RDTSocket(UnreliableSocket):
                         data += msg
                         self.recv_base += 1
 
-                        while buffer.peek() == self.recv_base:
+                        while buffer.peek() == self.new_seq_num():
                             msg = buffer.get()[1]
                             data += msg
                             self.recv_base += 1
