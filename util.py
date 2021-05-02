@@ -36,15 +36,15 @@ class UnreliableSocket(object):
     def recvfrom(self, bufsize):
         data, addr = self.sock.recvfrom(bufsize)
         pkt_header = PacketHeader(data[:16])
-        # if random.random() < self.delay_rate:
-        #     time.sleep(self.delay_time)
-        #     return data, addr
-        # if random.random() < self.loss_rate:
-        #     if pkt_header.type != END and pkt_header.type != END_ACK:
-        #         return self.recvfrom(bufsize)
-        # if random.random() < self.corruption_rate:
-        #     if pkt_header.type != END and pkt_header.type != END_ACK:
-        #         return corrupt_data(data), addr
+        if random.random() < self.delay_rate:
+            time.sleep(self.delay_time)
+            return data, addr
+        if random.random() < self.loss_rate:
+            if pkt_header.type != END and pkt_header.type != END_ACK:
+                return self.recvfrom(bufsize)
+        if random.random() < self.corruption_rate:
+            if pkt_header.type != END and pkt_header.type != END_ACK:
+                return corrupt_data(data), addr
         return data, addr
 
     def sendto(self, data, addr):

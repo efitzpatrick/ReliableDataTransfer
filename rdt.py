@@ -11,15 +11,17 @@ import random
 
 PACKET_SIZE = 23  # 1472  # 1500-8(udp header)-20(IP header) = 1472
 PAYLOAD_SIZE = 1456  # 1472(PACKET_SIZE)-16(Header) = 1456
-ret_time = 0.5  # timeout value
+ret_time = 5.5  # timeout value #TODO CHANGE BACK
 
 
 def unpack(packet):
     pkt_header = PacketHeader(packet[:16])
     pkt_msg = packet[16:16 + pkt_header.length]
-    if verify_packet(pkt_header, pkt_msg):
+    valid_packet = verify_packet(pkt_header, pkt_msg)
+    if valid_packet:
         return pkt_header, pkt_msg
     else:
+        print("corrupt packet")
         raise CorruptPacket
 
 
@@ -126,12 +128,13 @@ class RDTSocket(UnreliableSocket):
                             self.recv_base += 1
 
                         self.send_ack(util.ACK)
-                        print("send ack ", self.recv_base)
 
                     elif header.seq_num > self.recv_base:
                         buffer.put((header.seq_num, msg))
                         self.send_ack(util.ACK)
-                        print("send ack ", self.recv_base)
+
+                    else:
+                        self.send_ack(util.ACK)
                 elif header.type == util.END:
                     self.send_ack(util.END_ACK)
                     print("send end ack")
@@ -139,7 +142,7 @@ class RDTSocket(UnreliableSocket):
             except BlockingIOError:
                 pass
             except CorruptPacket:
-                print("corrupt packet")
+                pass
 
     def send(self, _bytes):
         """
@@ -231,14 +234,16 @@ class RDTSocket(UnreliableSocket):
                 pass
             except CorruptPacket:
                 pass
-            if time.time() - end_timeout >= .500:
+            if time.time() - end_timeout >= ret_time:
                 self.send_packet(util.END, "", self.recv_base + 1)
                 end_timeout = time.time()
 
     def send_ack(self, msg_type):
         self.send_packet(msg_type, "", self.recv_base)
+        print("send ack ", self.recv_base)
 
     def send_packet(self, msg_type, msg, seq_num):
+        time.sleep(5)
         pkt_header = PacketHeader(type=msg_type, seq_num=seq_num, length=len(msg))
         checksum = compute_checksum(pkt_header / msg)
         pkt_header.checksum = checksum
