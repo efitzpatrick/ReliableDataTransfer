@@ -9,9 +9,9 @@ from util import *
 import time
 import random
 
-PACKET_SIZE = 23  # 1472  # 1500-8(udp header)-20(IP header) = 1472
+PACKET_SIZE = 50  # 1472  # 1500-8(udp header)-20(IP header) = 1472
 PAYLOAD_SIZE = 1456  # 1472(PACKET_SIZE)-16(Header) = 1456
-ret_time = 5.5  # timeout value #TODO CHANGE BACK
+ret_time = .5  # timeout value
 
 
 def unpack(packet):
@@ -155,11 +155,11 @@ class RDTSocket(UnreliableSocket):
         assert self._send_to, "Connection not established yet. Use sendto instead."
         chunks = split_bytes(_bytes)
         # Send all messages
-        self.send_window(chunks)
+        self.send_all_chunks(chunks)
         # Send and wait for end
         self.close()
 
-    def send_window(self, chunks):
+    def send_all_chunks(self, chunks):
         start_time = time.time()
         # Keeps track of the sent messages
         sent = []
@@ -190,10 +190,7 @@ class RDTSocket(UnreliableSocket):
                         self.send_base = header.seq_num
                         if self.send_base > len(chunks):
                             break
-                        self.send_packet(util.DATA, chunks[self.send_base], self.send_base)
-                        start_time = time.time()
-                        sent.append(self.send_base)
-                        print(self.send_base)
+                        start_time = self.send_window(chunks, sent, start_time)
 
             except BlockingIOError:
                 pass
@@ -203,15 +200,19 @@ class RDTSocket(UnreliableSocket):
             if time.time() - start_time >= ret_time:
                 # TODO start_time
                 print("enter timeout")
-                range_end = self.send_base + self.window_size
-                # TODO check for off by one error
-                if range_end > len(chunks):
-                    range_end = len(chunks)
-                for i in range(self.send_base, range_end):
-                    self.send_packet(util.DATA, chunks[i], i)
-                    start_time = time.time()
-                    sent.append(i)
-                    print(i)
+                start_time = self.send_window(chunks, sent, start_time)
+
+    def send_window(self, chunks, sent, start_time):
+        range_end = self.send_base + self.window_size
+        # TODO check for off by one error
+        if range_end > len(chunks):
+            range_end = len(chunks)
+        for i in range(self.send_base, range_end):
+            self.send_packet(util.DATA, chunks[i], i)
+            start_time = time.time()
+            sent.append(i)
+            print(i)
+        return start_time
 
     def close(self):
         """
@@ -243,7 +244,7 @@ class RDTSocket(UnreliableSocket):
         print("send ack ", self.recv_base)
 
     def send_packet(self, msg_type, msg, seq_num):
-        time.sleep(5)
+        # time.sleep(5)
         pkt_header = PacketHeader(type=msg_type, seq_num=seq_num, length=len(msg))
         checksum = compute_checksum(pkt_header / msg)
         pkt_header.checksum = checksum
