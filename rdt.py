@@ -9,25 +9,25 @@ from util import *
 import time
 import random
 
-PACKET_SIZE = 50  # 1472  # 1500-8(udp header)-20(IP header) = 1472
+PACKET_SIZE = 1472  # 1472  # 1500-8(udp header)-20(IP header) = 1472
 PAYLOAD_SIZE = 1456  # 1472(PACKET_SIZE)-16(Header) = 1456
 ret_time = .5  # timeout value
 
 
 def unpack(packet):
+    # Unpack the msg and header from packet of bytes, validate that it is not corrupt
     pkt_header = PacketHeader(packet[:16])
     pkt_msg = packet[16:16 + pkt_header.length]
     valid_packet = verify_packet(pkt_header, pkt_msg)
     if valid_packet:
         return pkt_header, pkt_msg
     else:
-        print("corrupt packet")
         raise CorruptPacket
 
 
 def split_bytes(_bytes):
-    chunk_size = PAYLOAD_SIZE
-    number_of_chunks = len(_bytes) / PACKET_SIZE
+    # Slits the bytes into managable chunks, returns a list of the chunks
+    number_of_chunks = len(_bytes) / PAYLOAD_SIZE
     number_of_chunks = math.ceil(number_of_chunks)
     chunks, chunk_size = len(_bytes), math.ceil(len(_bytes) / number_of_chunks)
     if chunks < 1:
@@ -68,7 +68,6 @@ class RDTSocket(UnreliableSocket):
                     header, msg = unpack(data)
                     self.off_by = header.seq_num
                     self.send_packet(util.ACK, "", header.seq_num)
-                    print("acked start")
                     return addr
             except BlockingIOError:
                 pass
@@ -85,10 +84,8 @@ class RDTSocket(UnreliableSocket):
         self._send_to = address
         while True:
             self.send_packet(util.START, "", self.off_by)
-            print("sending packet")
             try:
                 self.recvfrom(PACKET_SIZE)
-                print("recieved ack")
                 return
             except BlockingIOError:
                 pass
@@ -114,7 +111,6 @@ class RDTSocket(UnreliableSocket):
                 header, msg = unpack(packet)
                 if header.type == util.DATA:
                     # If in sequence
-                    print("recieved ", header.seq_num)
                     if header.seq_num-self.off_by == self.recv_base:
                         data += msg
                         self.recv_base += 1
@@ -134,7 +130,6 @@ class RDTSocket(UnreliableSocket):
                         self.send_ack(util.ACK)
                 elif header.type == util.END:
                     self.send_ack(util.END_ACK)
-                    print("send end ack")
                     return data.decode()
             except BlockingIOError:
                 pass
@@ -168,7 +163,6 @@ class RDTSocket(UnreliableSocket):
                 recv_ack, _ = self.recvfrom(PACKET_SIZE)
                 if recv_ack:
                     header, msg = unpack(recv_ack)
-                    print("recieved ack ", header.seq_num)
                     # Ignore random start messages
                     if header.type == util.START:
                         pass
@@ -187,23 +181,21 @@ class RDTSocket(UnreliableSocket):
             except BlockingIOError:
                 pass
             except CorruptPacket:
-                print("corrupt packet")
+                pass
 
+            # If timeout exceeded
             if time.time() - start_time >= ret_time:
-                # TODO start_time
-                print("enter timeout")
                 start_time = self.send_window(chunks, sent, start_time)
 
     def send_window(self, chunks, sent, start_time):
+        # Send the whole window
         range_end = self.send_base + self.window_size
-        # TODO check for off by one error
         if range_end > len(chunks):
             range_end = len(chunks)
         for i in range(self.send_base, range_end):
             self.send_packet(util.DATA, chunks[i], self.new_seq_num(i))
             start_time = time.time()
             sent.append(i)
-            print(self.new_seq_num(i))
         return start_time
 
     def close(self):
@@ -215,7 +207,6 @@ class RDTSocket(UnreliableSocket):
         end_timeout = time.time()
         # TODO check end packet number
         self.send_packet(util.END, "", self.new_seq_num() + 1)
-        print("sent end ack")
         while True:
             try:
                 return_packet, _ = self.recvfrom(PACKET_SIZE)
@@ -233,7 +224,6 @@ class RDTSocket(UnreliableSocket):
 
     def send_ack(self, msg_type):
         self.send_packet(msg_type, "", self.new_seq_num())
-        print("send ack ", self.new_seq_num())
 
     def send_packet(self, msg_type, msg, seq_num):
         # time.sleep(5)
