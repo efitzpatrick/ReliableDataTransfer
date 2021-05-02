@@ -19,8 +19,9 @@ def unpack(packet):
     pkt_msg = packet[16:16 + pkt_header.length]
     if verify_packet(pkt_header, pkt_msg):
         return pkt_header, pkt_msg
-    else: 
+    else:
         raise CorruptPacket
+
 
 def split_bytes(_bytes):
     chunk_size = PAYLOAD_SIZE
@@ -112,30 +113,29 @@ class RDTSocket(UnreliableSocket):
             try:
                 packet, _ = self.recvfrom(bufsize)
                 header, msg = unpack(packet)
-                if verify_packet(header, msg):
-                    if header.type == util.DATA:
-                        # If in sequence
-                        print("recieved ", header.seq_num)
-                        if header.seq_num == self.recv_base:
+                if header.type == util.DATA:
+                    # If in sequence
+                    print("recieved ", header.seq_num)
+                    if header.seq_num == self.recv_base:
+                        data += msg
+                        self.recv_base += 1
+
+                        while buffer.peek() == self.recv_base:
+                            msg = buffer.get()[1]
                             data += msg
                             self.recv_base += 1
 
-                            while buffer.peek() == self.recv_base:
-                                msg = buffer.get()[1]
-                                data += msg
-                                self.recv_base += 1
+                        self.send_ack(util.ACK)
+                        print("send ack ", self.recv_base)
 
-                            self.send_ack(util.ACK)
-                            print("send ack ", self.recv_base)
-
-                        elif header.seq_num > self.recv_base:
-                            buffer.put((header.seq_num, msg))
-                            self.send_ack(util.ACK)
-                            print("send ack ", self.recv_base)
-                    elif header.type == util.END:
-                        self.send_ack(util.END_ACK)
-                        print("send end ack")
-                        return data.decode()
+                    elif header.seq_num > self.recv_base:
+                        buffer.put((header.seq_num, msg))
+                        self.send_ack(util.ACK)
+                        print("send ack ", self.recv_base)
+                elif header.type == util.END:
+                    self.send_ack(util.END_ACK)
+                    print("send end ack")
+                    return data.decode()
             except BlockingIOError:
                 pass
             except CorruptPacket:
